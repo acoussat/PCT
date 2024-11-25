@@ -99,3 +99,4 @@ IF(PCT_WITH_GEANT4)
 ENDIF(PCT_WITH_GEANT4)
 
 CONFIGURE_FILE("pctpairprotons.py" "pctpairprotons.py" COPYONLY)
+CONFIGURE_FILE("pctpairprotons_numpy.py" "pctpairprotons_numpy.py" COPYONLY)
