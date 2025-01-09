@@ -1,12 +1,14 @@
 # PCT
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/RTKConsortium/PCT/blob/master/LICENSE)
+
 PCT (Proton Computed Tomography) is a toolkit used to process proton CT data and reconstruct proton stopping power maps. PCT is written both in C++ and Python, and is designed to be used either as a code library, or with command-line applications.
 
 ## Installation
 
 PCT can be installed from source from its [git repository](https://github.com/SimonRit/PCT) hosted at GitHub. The command to clone the repository is:
 ```bash
-git clone https://github.com/SimonRit/PCT.git
+git clone https://github.com/RTKConsortium/PCT.git
 ```
 
 Configuration and compilation is handled via [CMake](https://cmake.org/). Configuration can be achieved using
@@ -40,3 +42,9 @@ Reconstruction typically involves the following steps:
 - `pctpaircuts` in order to remove nuclear collisions.
 - `pctbinning` in order to compute the distance-driven binning as described [here]( https://doi.org/10.1118/1.4789589).
 - `pctfdk` in order to reconstruct the data generated in the previous step using distance-driven FDK (as described [here](https://doi.org/10.1118/1.4789589)).
+
+## Copyright Centre National de la Recherche Scientifique
+
+Licensed under the Apache License, Version 2.0 (the "[License](https://www.apache.org/licenses/LICENSE-2.0.txt)"); you may not use this file except in compliance with the [License](https://www.apache.org/licenses/LICENSE-2.0.txt).
+
+Unless required by applicable law or agreed to in writing, software distributed under the [License](https://www.apache.org/licenses/LICENSE-2.0.txt) is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the [License](https://www.apache.org/licenses/LICENSE-2.0.txt) for the specific language governing permissions and limitations under the [License](https://www.apache.org/licenses/LICENSE-2.0.txt).
