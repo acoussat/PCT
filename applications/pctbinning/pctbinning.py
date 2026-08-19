@@ -190,15 +190,14 @@ def process(args_info: argparse.Namespace):
 
     projection.Update()
 
-    filler = pct.SmallHoleFiller[OutputImageType]()
+    hole_filter = pct.HoleFillingImageFilter[OutputImageType].New()
     if args_info.fill:
-        filler.SetImage(projection.GetOutput())
-        filler.SetHolePixel(0.0)
-        filler.Fill()
+        hole_filter.SetInput(projection.GetOutput())
+        hole_filter.Update()
 
     cii = itk.ChangeInformationImageFilter[OutputImageType].New()
     if args_info.fill:
-        cii.SetInput(filler.GetOutput())
+        cii.SetInput(hole_filter.GetOutput())
     else:
         cii.SetInput(projection.GetOutput())
     cii.ChangeOriginOn()
