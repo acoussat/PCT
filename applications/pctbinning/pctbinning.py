@@ -22,6 +22,7 @@ def build_parser():
     parser.add_argument(
         "-c", "--count", help="Image of count of proton pairs per pixel"
     )
+    parser.add_argument("--variance", help="Image of variance of WEPL values per pixel")
     parser.add_argument(
         "--scatwepl", help="Image of scattering WEPL of proton pairs per pixel"
     )
@@ -32,6 +33,11 @@ def build_parser():
         help="Use robust estimation of scattering using 19.1 percentile.",
         action="store_true",
         default=False,
+    )
+    parser.add_argument(
+        "--particle",
+        help="Particle used for imaging (proton or alpha)",
+        default="proton",
     )
     parser.add_argument(
         "-v", "--verbose", help="Verbose execution", action="store_true", default=False
@@ -85,6 +91,12 @@ def build_parser():
     parser.add_argument(
         "--fill",
         help="Fill holes, i.e. pixels that were not hit by protons",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--fillvariance",
+        help="Fill holes, i.e. pixels that were not hit by protons (for variance projections)",
         action="store_true",
         default=False,
     )
@@ -159,6 +171,8 @@ def process(args_info: argparse.Namespace):
     projection.SetRobust(args_info.robust)
     projection.SetComputeScattering(bool(args_info.scatwepl))
     projection.SetComputeNoise(bool(args_info.noise))
+    projection.SetComputeVariance(bool(args_info.variance))
+    projection.SetParticle(args_info.particle)
 
     if args_info.quadricIn:
         # quadric = object surface
@@ -215,6 +229,25 @@ def process(args_info: argparse.Namespace):
     if args_info.count:
         # Write
         itk.imwrite(projection.GetCount(), args_info.count)
+
+    if args_info.variance:
+        VarianceImageType = itk.Image[itk.F, 3]
+        variance_hole_filter = pct.HoleFillingImageFilter[VarianceImageType].New()
+        if args_info.fillvariance:
+            variance_hole_filter.SetInput(projection.GetVariance())
+            variance_hole_filter.Update()
+        cii_var = itk.ChangeInformationImageFilter[VarianceImageType].New()
+        if args_info.fillvariance:
+            cii_var.SetInput(variance_hole_filter.GetOutput())
+        else:
+            cii_var.SetInput(projection.GetVariance())
+        cii_var.ChangeOriginOn()
+        cii_var.ChangeDirectionOn()
+        cii_var.ChangeSpacingOn()
+        cii_var.SetOutputDirection(projection.GetOutput().GetDirection())
+        cii_var.SetOutputOrigin(projection.GetOutput().GetOrigin())
+        cii_var.SetOutputSpacing(projection.GetOutput().GetSpacing())
+        itk.imwrite(cii_var.GetOutput(), args_info.variance)
 
     if args_info.scatwepl:
         # Write
