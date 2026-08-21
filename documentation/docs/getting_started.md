@@ -33,6 +33,24 @@ python gate/protonct.py --help
 ```
 Of course, feel free to explore the content of `protonct.py` directly to adapt it to your needs.
 
+### Optional: add realistic noise to the GATE output
+
+PCT provides the `pctaddnoise` application that adds realistic noise to the generated data. This application takes as input a ROOT file generated from a GATE simulation (such as `protonct.py`) that represents either the upstream or the downstream detector. The following uncertainties are taken into account:
+- if the ROOT file contains position and direction branches: realistic position and direction uncertainties based on [Krah et al. (PMB, 2018)](https://doi.org/10.1088/1361-6560/aaca1f)
+- if the ROOT file contains an energy branch: Gaussian energy uncertainty
+- if the ROOT file contains a time branch: Gaussian time uncertainty
+
+For instance, noise can be added using the following command:
+```bash
+pctaddnoise -i gate_simulation/PhaseSpaceIn.root -o gate_simulation/PhaseSpaceIn_noisy.root --material-budget .01 --tracker-distance 10 --noise-energy 10
+```
+which needs to be repeated for `PhaseSpaceOut.root` as well.
+
+As usual, you can explore additional options provided by `pctaddnoise` by running
+```bash
+pctaddnoise --help
+```
+
 (pairing)=
 ## Protons pairing
 

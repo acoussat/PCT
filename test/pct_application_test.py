@@ -3,6 +3,7 @@ import pytest
 import itk
 import urllib.request
 import numpy as np
+import uproot
 from itk import PCT as pct
 
 
@@ -100,3 +101,19 @@ def test_lomalinda_application(
     reference_lomalinda = itk.array_from_image(itk.imread(baseline_lomalinda_mhd))
     assert np.array_equal(test_lomalinda, reference_lomalinda)
     return output0000
+
+
+baseline_addnoise = download_file_fixture(
+    "6a8561052688ba21262c390a", "baseline_addnoise.root"
+)
+
+
+def test_addnoise_application(tmp_path, phasespacein_root, baseline_addnoise):
+    output = tmp_path / "noise_test.root"
+    tree = "PhaseSpaceIn"
+    pct.pctaddnoise(
+        f"-i {phasespacein_root} -o {output} --tree {tree} --material-budget .01 --tracker-distance 10 --translation -5 --noise-position 10 --noise-energy 10 --seed 1234"
+    )
+    root_test = uproot.open(output)[tree].arrays(library="np")
+    root_baseline = uproot.open(baseline_addnoise)[tree].arrays(library="np")
+    assert np.array_equal(root_test, root_baseline)

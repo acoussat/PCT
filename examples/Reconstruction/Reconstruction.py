@@ -19,14 +19,25 @@ number_of_projections = 90
 gate_folder = os.path.join(output_folder, "gate")
 protonct(gate_folder, projections=number_of_projections, verbose=False)
 
-# TODO example on how to make data noisy
+# Add noise to generated data
+for file in ["PhaseSpaceIn", "PhaseSpaceOut"]:
+    pct.pctaddnoise(
+        input=os.path.join(gate_folder, f"{file}.root"),
+        output=os.path.join(gate_folder, f"{file}_noisy.root"),
+        tree=file,
+        material_budget=0.01,
+        tracker_distance=10.0,
+        noise_position=1.0,
+        noise_energy=1.0,
+        seed=1234,
+    )
 
 # Convert GATE data to PCT list-mode
 pairs_folder = os.path.join(output_folder, "pairs")
 os.makedirs(pairs_folder, exist_ok=True)
 pct.pctpairprotons(
-    input_in=os.path.join(gate_folder, "PhaseSpaceIn.root"),
-    input_out=os.path.join(gate_folder, "PhaseSpaceOut.root"),
+    input_in=os.path.join(gate_folder, "PhaseSpaceIn_noisy.root"),
+    input_out=os.path.join(gate_folder, "PhaseSpaceOut_noisy.root"),
     output=os.path.join(pairs_folder, "pairs.mhd"),
     psin="PhaseSpaceIn",
     psout="PhaseSpaceOut",
