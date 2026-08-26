@@ -49,14 +49,6 @@ def build_parser():
         action="store_true",
     )
     parser.add_argument(
-        "--fit", help="Fit file used to convert from energy loss or TOF to WEPL"
-    )
-    parser.add_argument(
-        "--fit-kind",
-        help="Whether to convert to WEPL using energy loss or TOF",
-        choices=["tof", "energy"],
-    )
-    parser.add_argument(
         "--store-time",
         help="Store time instead of energy in the output list-mode",
         default=False,
@@ -72,7 +64,130 @@ def build_parser():
         "--psout", help="Name of tree in output phase space", default="PhaseSpace"
     )
 
+    single_lut = parser.add_argument_group("Single LUT for conversion to WEPL")
+    single_lut.add_argument(
+        "--fit", help="Fit file used to convert from energy loss or TOF to WEPL"
+    )
+    single_lut.add_argument(
+        "--fit-kind",
+        help="Whether to convert to WEPL using energy loss or TOF",
+        choices=["tof", "energy"],
+    )
+
+    double_lut = parser.add_argument_group("Double LUT for conversion to WEPL")
+    double_lut.add_argument(
+        "--lut-tof", help="LUT corresponding to TOF in double LUT method"
+    )
+    double_lut.add_argument(
+        "--lut-vel", help="LUT corresponding to velocity in double LUT method"
+    )
+    double_lut.add_argument(
+        "--quadric",
+        help="Quadric representing the hull of the object",
+        type=float,
+        nargs=10,
+        required=False,
+    )
+    double_lut.add_argument(
+        "--angle", help="Angle of the current projection", type=float, required=False
+    )
+
     return parser
+
+
+m0 = 938.27208943  # MeV/c2
+c = 299.792458  # mm/ns
+
+
+def make_hull(quadric, angle):
+    from itk import RTK as rtk
+
+    hull = rtk.QuadricShape.New()
+    hull.SetA(quadric[0])
+    hull.SetB(quadric[1])
+    hull.SetC(quadric[2])
+    hull.SetD(quadric[3])
+    hull.SetE(quadric[4])
+    hull.SetF(quadric[5])
+    hull.SetG(quadric[6])
+    hull.SetH(quadric[7])
+    hull.SetI(quadric[8])
+    hull.SetJ(quadric[9])
+
+    theta = np.deg2rad(angle)
+    hull.Rotate(
+        itk.matrix_from_array(
+            [
+                [np.cos(theta), 0.0, np.sin(theta)],
+                [0.0, 1.0, 0.0],
+                [-np.sin(theta), 0.0, np.cos(theta)],
+            ]
+        )
+    )
+
+    return hull
+
+
+def tof_in_vacuum(d, e):
+    v = c * np.sqrt(1 - (m0**2) / ((m0 + e) ** 2))
+    return d / v
+
+
+def get_tof_and_distance(hull, p_u, d_u, p_d, d_d, energy, tof):
+
+    d_d_r = [-d for d in d_d]
+
+    intersect_u, d_uo, _ = hull.IsIntersectedByRay(p_u, d_u)  # assuming d_u is unitary
+    intersect_d, d2, _ = hull.IsIntersectedByRay(p_d, d_d_r)
+    if not (intersect_u and intersect_d):
+        raise ValueError
+
+    int1 = [p_u[i] + d_u[i] * d_uo for i in range(3)]
+    int2 = [p_d[i] + d_d_r[i] * d2 for i in range(3)]
+    d1 = np.sqrt(np.sum([(int1[i] - int2[i]) ** 2 for i in range(3)]))
+
+    tof_od = tof - tof_in_vacuum(d_uo, energy)
+
+    return tof_od, d1, d2
+
+
+def convert_tof_to_wepl(fit_tof, fit_vel, pairs, quadric, angle):
+    tof_coeffs = np.loadtxt(fit_tof)
+    vel_coeffs = np.loadtxt(fit_vel)
+
+    def tof_to_wepl(tof, d1, d2):
+        t1 = d1 * np.polymul(tof_coeffs, vel_coeffs)
+        t2 = [d2, 0.0]
+        t3 = tof * np.polymul(vel_coeffs, [1.0, 0.0])
+        p = np.polysub(np.polyadd(t1, t2), t3)
+        roots = [
+            np.real(r)
+            for r in np.roots(p)
+            if np.imag(r) == 0.0
+            and np.real(r) >= 0.0
+            and (d1 / r) * np.polyval(tof_coeffs, r) < tof
+        ]
+        return roots[-1]
+
+    names = pairs.dtype.names
+    hull = make_hull(quadric, angle)
+
+    for pi, pair in enumerate(pairs):
+        p = dict(zip(names, pair.tolist()))
+        p_u = [p["u_in"], p["v_in"], p["w_in"]]
+        p_d = [p["u_out"], p["v_out"], p["w_out"]]
+        d_u = [p["du_in"], p["dv_in"], p["dw_in"]]
+        d_d = [p["du_out"], p["dv_out"], p["dw_out"]]
+        energy = p["KineticEnergy_in"]
+        tof = p["LocalTime_out"] - p["LocalTime_in"]
+        try:
+            tof, d1, d2 = get_tof_and_distance(hull, p_u, d_u, p_d, d_d, energy, tof)
+            wepl = tof_to_wepl(tof, d1, d2)
+        except ValueError:
+            wepl = 0.0
+
+        pairs[pi]["KineticEnergy_out"] = wepl
+        pairs[pi]["KineticEnergy_in"] = 0.0
 
 
 def process(args_info: argparse.Namespace):
@@ -194,8 +309,8 @@ def process(args_info: argparse.Namespace):
         np.recarray.sort(pairs, order=["RunID", "EventID", "TrackID_in", "TrackID_out"])
     verbose("Merged input and output phase spaces.")
 
-    if args_info.fit is not None:
-        verbose("Converting energy loss or TOF to WEPL…")
+    if args_info.fit is not None:  # Single LUT
+        verbose("Converting energy loss or TOF to WEPL using single LUT technique…")
         with open(args_info.fit, encoding="utf-8") as f:
             p = json.load(f)
         if args_info.fit_kind == "tof":
@@ -207,6 +322,15 @@ def process(args_info: argparse.Namespace):
         wepls = np.polyval(p, xs)
         pairs["KineticEnergy_in"] = 0.0
         pairs["KineticEnergy_out"] = wepls
+    elif args_info.lut_tof is not None and args_info.lut_vel is not None:  # Double LUT
+        verbose("Converting energy loss or TOF to WEPL using double LUT technique…")
+        convert_tof_to_wepl(
+            args_info.lut_tof,
+            args_info.lut_vel,
+            pairs,
+            args_info.quadric,
+            args_info.angle,
+        )
 
     number_of_runs = pairs["RunID"].max() + 1
     verbose("Identified number of runs: " + str(number_of_runs))
