@@ -27,6 +27,7 @@ _app_modules = [
     "pctweplfit",
     "pctlomalinda",
     "pctaddnoise",
+    "pctdoublelut",
 ]
 
 # Dynamically access make_application_func from pctExtras

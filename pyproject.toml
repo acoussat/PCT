@@ -47,6 +47,7 @@ pctpairprotons = "itk.pctpairprotons:main"
 pctweplfit = "itk.pctweplfit:main"
 pctlomalinda = "itk.pctlomalinda:main"
 pctaddnoise = "itk.pctaddnoise:main"
+pctdoublelut = "itk.pctdoublelut:main"
 
 [project.urls]
 Download = "https://github.com/RTKConsortium/PCT"
