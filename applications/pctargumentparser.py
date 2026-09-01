@@ -1,10 +1,10 @@
+import re
 import argparse
 import itk
 from itk import PCT as pct
+import difflib
 import inspect
 from typing import Optional
-import difflib
-import re
 
 __all__ = ["PCTArgumentParser"]
 
@@ -24,35 +24,32 @@ class PCTArgumentParser(argparse.ArgumentParser):
         self._negative_number_matcher = re.compile(r"-\.?\d")
         self.add_argument("-V", "--version", action="version", version=pct.__version__)
 
-    def build_signature(self) -> inspect.Signature:
-        """Build a compact Python signature: only required kwargs + **kwargs."""
-        required_params = []
-        for action in self._actions:
-            name = getattr(action, "dest", None)
-            if not name or name in ("help", "version"):
-                continue
-            if getattr(action, "required", False):
-                required_params.append(
-                    inspect.Parameter(name=name, kind=inspect.Parameter.KEYWORD_ONLY)
-                )
-        # Add catch-all for the many optional CLI options to keep help inline
-        var_kw = inspect.Parameter("kwargs", kind=inspect.Parameter.VAR_KEYWORD)
-        return inspect.Signature(required_params + [var_kw])
-
-    def build_usage_examples(self, app_name: Optional[str] = None) -> str:
-        """Return a Usage examples block for Python help()."""
-        name = app_name or self.prog
-        # Collect required destinations
-        req = [
+    def required_dests(self):
+        return sorted(
             a.dest
             for a in self._actions
             if getattr(a, "required", False)
             and a.dest
             and a.dest not in ("help", "version")
+        )
+
+    def build_signature(self) -> inspect.Signature:
+        """Build a compact Python signature: only required kwargs + **kwargs."""
+        params = [
+            inspect.Parameter(name=d, kind=inspect.Parameter.KEYWORD_ONLY)
+            for d in self.required_dests()
         ]
-        shell = f"{name}(\"{' '.join([f'--{d} {d.upper()}' for d in req])}\")"
-        py = f"{name}({', '.join([f'{d}={d.upper()}' for d in req])})"
-        return "Usage:\n" f"    • Shell-style: {shell}\n" f"    • Python API:  {py}\n\n"
+        # Add catch-all for the many optional CLI options to keep help inline
+        params.append(inspect.Parameter("kwargs", kind=inspect.Parameter.VAR_KEYWORD))
+        return inspect.Signature(params)
+
+    def build_usage_examples(self, app_name: Optional[str] = None) -> str:
+        """Return a Usage examples block for Python help()."""
+        name = app_name or self.prog
+        req = self.required_dests()
+        shell = name + "(" + " ".join(f"--{d} {d.upper()}" for d in req) + ")"
+        py = name + "(" + ", ".join(f"{d}={d.upper()}" for d in req) + ")"
+        return f"Usage:\n    • Shell-style: {shell}\n    • Python API:  {py}\n\n"
 
     def apply_signature(self, func):
         """Apply the built signature to a callable and return it."""
@@ -64,38 +61,37 @@ class PCTArgumentParser(argparse.ArgumentParser):
         Supported forms:
           --opt A B C      (space separated)
           --opt A,B,C      (single token, comma separated)
+        Applies to all nargs="+" options, including string (path) lists.
         """
-        neutralized = {}
+        multi_valued = {}
         for action in self._actions:
             dest = getattr(action, "dest", None)
             if not dest or dest in ("help", "version"):
                 continue
-            nargs = getattr(action, "nargs", None)
-            if nargs != "+":
+            if getattr(action, "nargs", None) != "+":
                 continue
-            t = getattr(action, "type", None)
             # Neutralize all types (including str) so comma tokens like "a,b" or
-            # "1,2,3" can be split after parsing. str types were previously skipped,
-            # breaking string/path lists passed via the Python API.
-            neutralized[dest] = t or str
+            # "1,2,3" can be split after parsing. The original type is restored below.
+            cast = action.type or str
+            multi_valued[dest] = cast
             action.type = str
-        namespace = super().parse_args(args, namespace)
-        for action in self._actions:
-            dest = getattr(action, "dest", None)
-            if dest not in neutralized:
-                continue
-            caster = neutralized[dest]
+        try:
+            namespace = super().parse_args(args, namespace)
+        finally:
+            for action in self._actions:
+                dest = getattr(action, "dest", None)
+                if dest in multi_valued:
+                    action.type = multi_valued[dest]
+        for dest, cast in multi_valued.items():
             val = getattr(namespace, dest, None)
-            if isinstance(val, list):
-                # Case 1: user supplied a single token containing commas (e.g. "1,2,3").
-                # Split on commas, strip whitespace, drop empty pieces, then cast each element.
-                if len(val) == 1 and isinstance(val[0], str) and "," in val[0]:
-                    pieces = [s for s in (p.strip() for p in val[0].split(",")) if s]
-                    setattr(namespace, dest, [caster(p) for p in pieces])
-                else:
-                    # Case 2: normal space-separated form (e.g. "1 2 3"). Just cast every token.
-                    setattr(namespace, dest, [caster(tk) for tk in val])
-            action.type = neutralized[dest]
+            # Case 1: user supplied a single token containing commas (e.g. "1,2,3" or
+            # "a.nrrd,b.nrrd"). Split on commas, strip whitespace, drop empty pieces.
+            if isinstance(val, list) and len(val) == 1 and isinstance(val[0], str) and "," in val[0]:
+                pieces = [s for s in (p.strip() for p in val[0].split(",")) if s]
+                setattr(namespace, dest, [cast(piece) for piece in pieces])
+            else:
+                # Case 2: normal space-separated form (e.g. "1 2 3"). Just cast every token.
+                setattr(namespace, dest, [cast(piece) for piece in val])
         return namespace
 
     def parse_kwargs(self, func_name: Optional[str] = None, **kwargs):
@@ -121,8 +117,10 @@ class PCTArgumentParser(argparse.ArgumentParser):
         argv = []
         for key, val in kwargs.items():
             action = actions[key]
-            opt_strings = list(action.option_strings)
-            flag = next((o for o in opt_strings if o.startswith("--")), opt_strings[0])
+            flag = next(
+                (o for o in action.option_strings if o.startswith("--")),
+                action.option_strings[0],
+            )
             if isinstance(val, bool):
                 if val:
                     argv.append(flag)
