@@ -86,12 +86,6 @@ def build_parser():
         default=0,
     )
     parser.add_argument(
-        "--check-grad",
-        help="Check gradient implementation",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
         "-q",
         "--physical-quantity",
         help="Physical quantity to use to do the reconstruction",
@@ -570,33 +564,6 @@ def write_report(
         )
 
 
-def check_grad_impl():
-    torch.set_default_dtype(torch.float64)
-
-    e = torch.rand(10, requires_grad=True) * 1000
-    torch.autograd.gradcheck(Velocity.apply, (e))
-
-    number_of_protons = 10
-    es = torch.rand(number_of_protons) * 200
-    rsps = torch.rand(number_of_protons, requires_grad=True)
-    sp_h2o = torch.rand(number_of_protons) * 10
-    d = torch.rand(number_of_protons) * 10
-    torch.autograd.gradcheck(EnergyLoss.apply, (es, rsps, sp_h2o, d))
-
-    number_of_protons = 100
-    rsp = torch.rand((10, 10, 10), requires_grad=True) * 2
-    rsp_spacing = (10, 10, 10)
-    ps = torch.rand((number_of_protons, 3)) + -5 * 10
-    torch.autograd.gradcheck(RSPInterp.apply, (rsp, rsp_spacing, ps[0], ps[1], ps[2]))
-
-    energies = torch.linspace(0.0, 200.0, 200)
-    sps = torch.rand(energies.shape)
-    es = torch.rand((100,), requires_grad=True) * 200.0
-    torch.autograd.gradcheck(SPWater.apply, (energies, sps, es))
-
-    torch.set_default_dtype(torch.float32)
-
-
 def get_optimizer(name, learning_rate, rsp):
     if name == "SGD":
         optimizer = torch.optim.SGD([rsp], lr=learning_rate)
@@ -611,11 +578,6 @@ def get_optimizer(name, learning_rate, rsp):
 
 
 def process(args_info: argparse.Namespace):
-
-    if args_info.check_grad:
-        pv(args_info.verbose, "Checking gradients…")
-        check_grad_impl()
-        return
 
     from itk import RTK as rtk
 
