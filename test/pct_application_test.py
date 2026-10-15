@@ -56,6 +56,33 @@ def test_pairprotons_application(
     assert np.array_equal(pairs_test, pairs_baseline)
 
 
+baseline_pairs_time_mhd = download_file_fixture(
+    "dfe2e511b30eb9ab6c5222d2c450f1ac374de269ae0b6766c0f9fa2bf1dc4dc04291990c8da1d718b140b5c5de4fccf8eb533836beaaeb0745b62f443e3c5eb2",
+    "pairs_time0000.mhd",
+)
+baseline_pairs_time_raw = download_file_fixture(
+    "c14ce5c2a15b2732dee8521b8a29f89e7ae70904cf3cac38900876e78c0280adb2a4b29e5266a319e3e43c10cdd702cd462416dfed795f52a85b50f1f8ff5e0b",
+    "pairs_time0000.raw",
+)
+
+
+def test_pairprotons_application_store_time(
+    tmp_path,
+    phasespacein_root,
+    phasespaceout_root,
+    baseline_pairs_time_mhd,
+    baseline_pairs_time_raw,
+):
+    output = tmp_path / "pairs_test.mhd"
+    pct.pctpairprotons(
+        f"-i {phasespacein_root} -j {phasespaceout_root} -o {output} --plane-in -110 --plane-out 110 --psin PhaseSpaceIn --psout PhaseSpaceOut --store-time"
+    )
+    output0000 = tmp_path / "pairs_test0000.mhd"
+    pairs_test = itk.array_from_image(itk.imread(output0000))
+    pairs_baseline = itk.array_from_image(itk.imread(baseline_pairs_time_mhd))
+    assert np.array_equal(pairs_test, pairs_baseline)
+
+
 def test_weplfit_application(tmp_path):
     output = tmp_path / "weplfit"
     pct.pctweplfit(
