@@ -17,25 +17,25 @@ A proton CT set-up typically involves several elements:
 
 [GATE](http://www.opengatecollaboration.org/) is a software that allows the definition of the above-described elements, place them in space, and simulate the movements and interactions of protons in a physically realistic way. Please refer to the [GATE user manual](https://opengate-python.readthedocs.io/en/master/) for detailed information about how to install and use GATE.
 
-Since its version 10, GATE offers a Python interface. PCT provides an example of a proton CT simulation that can be found in `gate/protonct.py`. This simulation defines a 200 MeV divergent proton beam that goes through a phantom which is sandwiched between two planar detectors that track protons' position, direction and energy. The set-up is illustrated by the picture below.
+Since its version 10.1.1, GATE offers a Python interface, and provides the `protonct` application that simulates a proton CT acquisition. This simulation defines a 200 MeV divergent proton beam that goes through a phantom which is sandwiched between two planar detectors that track protons' position, direction and energy. The set-up is illustrated by the picture below.
 
 ![Proton CT GATE simulation.](ExternalData/protonct.png)
 
 Assuming that GATE was properly installed, proton CT data can be generated with the following command:
 ```bash
-python gate/protonct.py --output gate_simulation --verbose
+protonct --output gate_simulation --verbose
 ```
 The output is stored in ROOT files in the `gate_simulation` folder. `PhaseSpaceIn.root` contains the data for the upstream detector, while `PhaseSpaceOut.root` that of the downstream detector. `protonct.txt` contains details and statistics about the simulation.
 
 You can explore additional options provided by `protonct.py` by running
 ```bash
-python gate/protonct.py --help
+protonct --help
 ```
-Of course, feel free to explore the content of `protonct.py` directly to adapt it to your needs.
+Of course, feel free to copy this example simulation to adapt it to your needs.
 
 ### Optional: add realistic noise to the GATE output
 
-PCT provides the `pctaddnoise` application that adds realistic noise to the generated data. This application takes as input a ROOT file generated from a GATE simulation (such as `protonct.py`) that represents either the upstream or the downstream detector. The following uncertainties are taken into account:
+PCT provides the `pctaddnoise` application that adds realistic noise to the generated data. This application takes as input a ROOT file generated from a GATE simulation (such as GATE's `protonct`) that represents either the upstream or the downstream detector. The following uncertainties are taken into account:
 - if the ROOT file contains position and direction branches: realistic position and direction uncertainties based on [Krah et al. (PMB, 2018)](https://doi.org/10.1088/1361-6560/aaca1f)
 - if the ROOT file contains an energy branch: Gaussian energy uncertainty
 - if the ROOT file contains a time branch: Gaussian time uncertainty

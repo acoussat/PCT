@@ -118,7 +118,7 @@ pytest test/*.py
 ```bash
 pip install opengate
 ```
-An example of proton CT GATE simulation can be found in [`gate/protonct.py`](https://github.com/RTKConsortium/PCT/blob/main/gate/protonct.py).
+An example of proton CT GATE simulation can be found as the [`protonct` GATE application](https://github.com/OpenGATE/opengate/blob/master/opengate/contrib/protonct/protonct.py).
 
 ### Uproot
 
