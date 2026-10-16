@@ -2,7 +2,6 @@
 import argparse
 from datetime import datetime
 import time
-import struct
 import os
 import sys
 import random
@@ -143,54 +142,15 @@ class ProtonDataset(torch.utils.data.Dataset):
         self.pq = pq
 
         idx_bins = [0]
-        raw_files = []
-        number_of_vectors = 5
         for i in inputs:
             # Read image size without loading it
             reader = itk.MetaImageIO.New()
             reader.SetFileName(i)
             reader.ReadImageInformation()
-            if reader.GetDimensions(0) != number_of_vectors:
-                sys.exit(
-                    f"Wrong number of columns in file {i}! Expected {number_of_vectors}, got {reader.GetDimensions(0)}."
-                )
             number_of_elements = reader.GetDimensions(1)
             idx_bins.append(idx_bins[-1] + number_of_elements)
-            raw_files.append(ProtonDataset.get_mhd_value(i, "ElementDataFile"))
 
         self.idx_bins = torch.tensor(idx_bins)
-        self.raw_files = raw_files
-
-        self.element_size = number_of_vectors * 3  # bytes
-
-        mhd_to_bytes = {
-            "MET_CHAR": 1,
-            "MET_UCHAR": 1,
-            "MET_SHORT": 2,
-            "MET_USHORT": 2,
-            "MET_INT": 4,
-            "MET_UINT": 4,
-            "MET_LONG_LONG": 8,
-            "MET_ULONG_LONG": 8,
-            "MET_FLOAT": 4,
-            "MET_DOUBLE": 8,
-        }
-        element_type = ProtonDataset.get_mhd_value(
-            inputs[0], "ElementType"
-        )  # assuming they are all the same across files
-        self.pixel_size = mhd_to_bytes[element_type]
-
-    @staticmethod
-    def get_mhd_value(mhd_filename, requested_key):
-        with open(mhd_filename) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                if key.strip().lower() == requested_key.lower():
-                    return value.strip()
-        return None
 
     def get_idx_file(self, idx):
         return (torch.bucketize(idx, self.idx_bins, right=True) - 1).item()
@@ -201,13 +161,22 @@ class ProtonDataset(torch.utils.data.Dataset):
     def get_element(self, idx):
         idx_file = self.get_idx_file(idx)
         idx_element = idx - self.idx_bins[idx_file]
-        raw_file = os.path.join(
-            os.path.dirname(self.inputs[idx_file]), self.raw_files[idx_file]
-        )
-        with open(raw_file, "rb") as f:
-            f.seek(idx_element * self.element_size * self.pixel_size)
-            r = f.read(self.element_size * self.pixel_size)
-            return struct.unpack("f" * self.element_size, r)
+
+        reader = itk.ImageFileReader[LMImageType].New(FileName=self.inputs[idx_file])
+        reader.UpdateOutputInformation()
+        volume = reader.GetOutput()
+        region = volume.GetLargestPossibleRegion()
+        index = region.GetIndex()
+        size = region.GetSize()
+        index[1] = int(idx_element)
+        size[1] = 1
+        region.SetIndex(index)
+        region.SetSize(size)
+        extract_filter = itk.ExtractImageFilter[LMImageType, LMImageType].New(volume)
+        extract_filter.SetExtractionRegion(region)
+        extract_filter.Update()
+
+        return itk.array_from_image(extract_filter.GetOutput()).squeeze()
 
     def __len__(self):
         return self.idx_bins[-1]
@@ -217,15 +186,15 @@ class ProtonDataset(torch.utils.data.Dataset):
         element = self.get_element(idx)
         theta = self.get_angle(idx) + torch.pi / 2
 
-        pos_in = [element[0], element[1], element[2]]
-        pos_out = [element[3], element[4], element[5]]
-        dir_in = [element[6], element[7], element[8]]
-        dir_out = [element[9], element[10], element[11]]
+        pos_in = element[0].tolist()
+        pos_out = element[1].tolist()
+        dir_in = element[2].tolist()
+        dir_out = element[3].tolist()
 
         if self.pq == "time":
-            pq = element[13] - element[12]
+            pq = element[4][1] - element[4][0]
         elif self.pq == "energy":
-            pq = element[13]
+            pq = element[4][1]
         else:
             raise ValueError
 
