@@ -209,11 +209,9 @@ def process(args_info: argparse.Namespace):
         tree = uproot.open(root_file)[tree_name]
         branches = tree.arrays(library="np")
 
-        # Some versions of uproot return a dictionnary, and some others a numpy.ndarray
-        # We handle both cases here to generate the dtype
-        if isinstance(branches, dict):
+        if isinstance(branches, dict):  # uproot >= 5.7.4
             dtype = [(name, branch.dtype) for name, branch in branches.items()]
-        elif isinstance(branches, np.ndarray):
+        elif isinstance(branches, np.ndarray):  # uproot < 5.7.4
             dtype = branches.dtype.descr
         else:
             raise NotImplementedError
