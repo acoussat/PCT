@@ -255,4 +255,5 @@ def test_addnoise_application(tmp_path, phasespacein_root, baseline_addnoise):
     )
     root_test = uproot.open(output)[tree].arrays(library="np")
     root_baseline = uproot.open(baseline_addnoise)[tree].arrays(library="np")
-    assert np.array_equal(root_test, root_baseline)
+    for k in root_baseline.keys():
+        assert np.array_equal(root_test[k], root_baseline[k])
